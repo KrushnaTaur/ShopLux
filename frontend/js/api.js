@@ -1,6 +1,6 @@
 // js/api.js - Shared API utilities and auth helpers
 
-const API_BASE = 'http://localhost:5000/api'; // Change to your Render URL in production
+const API_BASE = 'https://shoplux-hpvc.onrender.com/api'; // Change to your Render URL in production
 
 // ===== AUTH HELPERS =====
 const getToken = () => localStorage.getItem('token');
