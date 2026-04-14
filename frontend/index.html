@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ShopLux — Premium Store</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ===== NAVBAR ===== -->
+<nav class="navbar">
+  <a class="navbar-brand" href="index.html">✦ ShopLux</a>
+  <ul class="navbar-nav">
+    <li><span id="nav-user" style="display:none; color:var(--text-muted); font-size:0.85rem; padding:0 0.5rem;"></span></li>
+    <li><a class="nav-link active" href="index.html"><span>Shop</span></a></li>
+    <li><a class="nav-link" href="cart.html"><span>Cart</span> <span class="nav-badge" id="cart-count">0</span></a></li>
+    <li><a class="nav-link" href="orders.html"><span>Orders</span></a></li>
+    <li><a class="nav-link" href="admin.html" id="nav-admin" style="display:none;"><span>Admin</span></a></li>
+    <li><a class="nav-link btn btn-outline btn-sm" href="login.html" id="nav-login">Login</a></li>
+    <li><a class="nav-link btn btn-primary btn-sm" href="signup.html" id="nav-signup">Sign Up</a></li>
+    <li><button class="btn btn-ghost btn-sm" id="nav-logout" style="display:none;">Logout</button></li>
+  </ul>
+</nav>
+
+<!-- ===== HERO SECTION ===== -->
+<section style="background: linear-gradient(135deg, #1a1610 0%, #0d0d0d 100%); border-bottom: 1px solid var(--border); padding: 3rem 0;">
+  <div class="container" style="text-align:center;">
+    <p style="color:var(--accent); font-size:0.85rem; letter-spacing:0.2em; text-transform:uppercase; margin-bottom:0.8rem;">New Collection</p>
+    <h1 style="font-size:clamp(2rem,5vw,3.5rem); margin-bottom:1rem;">Curated for the Discerning</h1>
+    <p style="color:var(--text-muted); max-width:480px; margin:0 auto;">Explore handpicked products crafted with purpose. Quality that speaks for itself.</p>
+  </div>
+</section>
+
+<!-- ===== MAIN CONTENT ===== -->
+<main class="container page-content">
+
+  <!-- Search & Filter -->
+  <div class="search-bar">
+    <input type="text" id="search-input" class="form-control" placeholder="Search products..." />
+    <select id="sort-select" class="form-control" style="max-width:180px;">
+      <option value="newest">Newest First</option>
+      <option value="price-asc">Price: Low to High</option>
+      <option value="price-desc">Price: High to Low</option>
+    </select>
+  </div>
+
+  <!-- Products Grid -->
+  <div id="products-grid" class="products-grid">
+    <!-- Loading state -->
+    <div class="loading-center" style="grid-column:1/-1;">
+      <div class="spinner"></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ===== TOAST ===== -->
+<div id="toast"></div>
+
+<script src="js/api.js"></script>
+<script>
+  let allProducts = [];
+
+  // Initialize page
+  document.addEventListener('DOMContentLoaded', async () => {
+    updateNavbar();
+    await loadProducts();
+    await updateCartBadge();
+
+    // Search handler
+    document.getElementById('search-input').addEventListener('input', renderProducts);
+    document.getElementById('sort-select').addEventListener('change', renderProducts);
+  });
+
+  // Fetch all products from backend
+  const loadProducts = async () => {
+    try {
+      allProducts = await apiFetch('/products');
+      renderProducts();
+    } catch (err) {
+      document.getElementById('products-grid').innerHTML = `
+        <div class="empty-state" style="grid-column:1/-1;">
+          <div class="empty-icon">⚠️</div>
+          <h3>Could not load products</h3>
+          <p>${err.message}</p>
+        </div>`;
+    }
+  };
+
+  // Filter, sort, and render products
+  const renderProducts = () => {
+    const query  = document.getElementById('search-input').value.toLowerCase();
+    const sort   = document.getElementById('sort-select').value;
+    const grid   = document.getElementById('products-grid');
+
+    let filtered = allProducts.filter(p =>
+      p.name.toLowerCase().includes(query) ||
+      p.description.toLowerCase().includes(query)
+    );
+
+    if (sort === 'price-asc')  filtered.sort((a,b) => a.price - b.price);
+    if (sort === 'price-desc') filtered.sort((a,b) => b.price - a.price);
+    if (sort === 'newest')     filtered.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    if (filtered.length === 0) {
+      grid.innerHTML = `
+        <div class="empty-state" style="grid-column:1/-1;">
+          <div class="empty-icon">🔍</div>
+          <h3>No products found</h3>
+          <p>Try a different search term</p>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = filtered.map(p => `
+      <div class="product-card">
+        <img
+          class="product-img"
+          src="${p.image || 'https://placehold.co/400x300/1a1a2e/c8a96e?text=No+Image'}"
+          alt="${p.name}"
+          onerror="this.src='https://placehold.co/400x300/1a1a2e/c8a96e?text=No+Image'"
+        />
+        <div class="product-info">
+          <div class="product-name">${p.name}</div>
+          <div class="product-desc">${p.description.substring(0, 80)}${p.description.length > 80 ? '...' : ''}</div>
+          <div class="product-price">${formatPrice(p.price)}</div>
+        </div>
+        <div class="product-actions">
+          <button class="btn btn-primary btn-sm" style="flex:1;" onclick="addToCart('${p._id}', '${p.name}')">
+            + Add to Cart
+          </button>
+        </div>
+      </div>
+    `).join('');
+  };
+
+  // Add product to cart
+  const addToCart = async (productId, productName) => {
+    if (!isLoggedIn()) {
+      showToast('Please login to add items to cart', 'error');
+      setTimeout(() => window.location.href = 'login.html', 1200);
+      return;
+    }
+    try {
+      await apiFetch('/cart/add', {
+        method: 'POST',
+        body: JSON.stringify({ productId, quantity: 1 }),
+      });
+      showToast(`${productName} added to cart! 🛒`);
+      await updateCartBadge();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  // Update cart item count badge in navbar
+  const updateCartBadge = async () => {
+    if (!isLoggedIn()) return;
+    try {
+      const cart = await apiFetch('/cart');
+      const count = cart.items?.reduce((sum, i) => sum + i.quantity, 0) || 0;
+      document.getElementById('cart-count').textContent = count;
+    } catch (_) {}
+  };
+</script>
+</body>
+</html>

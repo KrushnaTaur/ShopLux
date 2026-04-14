@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign Up — ShopLux</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body class="auth-page">
+
+<div class="auth-card">
+  <div class="auth-logo">
+    <span>✦ ShopLux</span>
+  </div>
+  <h2 class="auth-title">Create Account</h2>
+  <p class="auth-sub">Join and start shopping today</p>
+
+  <div id="alert" class="alert"></div>
+
+  <div class="form-group">
+    <label class="form-label">Full Name</label>
+    <input type="text" id="name" class="form-control" placeholder="John Doe" />
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Email</label>
+    <input type="email" id="email" class="form-control" placeholder="you@example.com" />
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Password</label>
+    <input type="password" id="password" class="form-control" placeholder="Min 6 characters" />
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Account Type</label>
+    <select id="role" class="form-control">
+      <option value="user">Customer</option>
+      <option value="admin">Admin (Demo)</option>
+    </select>
+  </div>
+
+  <button class="btn btn-primary btn-full btn-lg" id="signup-btn" onclick="handleSignup()">
+    Create Account
+  </button>
+
+  <div class="auth-footer">
+    Already have an account? <a href="login.html">Sign in →</a>
+  </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => redirectIfLoggedIn());
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleSignup();
+  });
+
+  const showAlert = (msg, type = 'error') => {
+    const el = document.getElementById('alert');
+    el.textContent = msg;
+    el.className = `alert alert-${type} show`;
+  };
+
+  const handleSignup = async () => {
+    const name     = document.getElementById('name').value.trim();
+    const email    = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const role     = document.getElementById('role').value;
+    const btn      = document.getElementById('signup-btn');
+
+    if (!name || !email || !password) return showAlert('Please fill in all fields');
+    if (password.length < 6) return showAlert('Password must be at least 6 characters');
+
+    btn.disabled = true;
+    btn.textContent = 'Creating account…';
+
+    try {
+      const data = await apiFetch('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({ name, email, password, role }),
+      });
+
+      saveAuth(data.token, data.user);
+      showAlert('Account created! Redirecting…', 'success');
+      setTimeout(() => window.location.href = 'index.html', 800);
+
+    } catch (err) {
+      showAlert(err.message);
+      btn.disabled = false;
+      btn.textContent = 'Create Account';
+    }
+  };
+</script>
+</body>
+</html>

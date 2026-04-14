@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cart — ShopLux</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <a class="navbar-brand" href="index.html">✦ ShopLux</a>
+  <ul class="navbar-nav">
+    <li><span id="nav-user" style="display:none; color:var(--text-muted); font-size:0.85rem; padding:0 0.5rem;"></span></li>
+    <li><a class="nav-link" href="index.html"><span>Shop</span></a></li>
+    <li><a class="nav-link active" href="cart.html"><span>Cart</span> <span class="nav-badge" id="cart-count">0</span></a></li>
+    <li><a class="nav-link" href="orders.html"><span>Orders</span></a></li>
+    <li><a class="nav-link" href="admin.html" id="nav-admin" style="display:none;"><span>Admin</span></a></li>
+    <li><a class="nav-link btn btn-outline btn-sm" href="login.html" id="nav-login">Login</a></li>
+    <li><a class="nav-link btn btn-primary btn-sm" href="signup.html" id="nav-signup">Sign Up</a></li>
+    <li><button class="btn btn-ghost btn-sm" id="nav-logout" style="display:none;">Logout</button></li>
+  </ul>
+</nav>
+
+<!-- CHECKOUT MODAL -->
+<div class="modal-overlay" id="checkout-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Shipping Address</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div id="modal-alert" class="alert"></div>
+
+    <div class="form-group">
+      <label class="form-label">Street Address</label>
+      <input type="text" id="street" class="form-control" placeholder="123 Main St" />
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem;">
+      <div class="form-group">
+        <label class="form-label">City</label>
+        <input type="text" id="city" class="form-control" placeholder="Mumbai" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">State</label>
+        <input type="text" id="state" class="form-control" placeholder="Maharashtra" />
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem;">
+      <div class="form-group">
+        <label class="form-label">ZIP Code</label>
+        <input type="text" id="zipCode" class="form-control" placeholder="400001" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Country</label>
+        <input type="text" id="country" class="form-control" value="India" />
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-full btn-lg" id="place-order-btn" onclick="placeOrder()">
+      Place Order
+    </button>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<main class="container page-content">
+  <div class="page-header">
+    <h1>Your Cart</h1>
+    <p id="item-count-text" style="color:var(--text-muted);"></p>
+  </div>
+
+  <div id="cart-content">
+    <div class="loading-center"><div class="spinner"></div></div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script src="js/api.js"></script>
+<script>
+  let cartData = { items: [], totalAmount: 0 };
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!requireLogin()) return;
+    updateNavbar();
+    await loadCart();
+  });
+
+  const loadCart = async () => {
+    try {
+      cartData = await apiFetch('/cart');
+      renderCart();
+    } catch (err) {
+      document.getElementById('cart-content').innerHTML =
+        `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>Error loading cart</h3><p>${err.message}</p></div>`;
+    }
+  };
+
+  const renderCart = () => {
+    const container = document.getElementById('cart-content');
+    const countText = document.getElementById('item-count-text');
+    const totalItems = cartData.items?.reduce((s, i) => s + i.quantity, 0) || 0;
+
+    document.getElementById('cart-count').textContent = totalItems;
+    countText.textContent = `${totalItems} item${totalItems !== 1 ? 's' : ''} in your cart`;
+
+    if (!cartData.items || cartData.items.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🛒</div>
+          <h3>Your cart is empty</h3>
+          <p>Looks like you haven't added anything yet</p>
+          <a href="index.html" class="btn btn-primary" style="margin-top:1.2rem;">Browse Products</a>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="cart-layout">
+        <div id="cart-items">
+          ${cartData.items.map(item => `
+            <div class="cart-item" id="item-${item.product._id}">
+              <img
+                class="cart-item-img"
+                src="${item.product.image || 'https://placehold.co/80x80/1a1a2e/c8a96e?text=?'}"
+                alt="${item.product.name}"
+                onerror="this.src='https://placehold.co/80x80/1a1a2e/c8a96e?text=?'"
+              />
+              <div class="cart-item-info">
+                <div class="cart-item-name">${item.product.name}</div>
+                <div class="cart-item-price">${formatPrice(item.product.price)}</div>
+                <div class="qty-control">
+                  <button class="qty-btn" onclick="updateQty('${item.product._id}', ${item.quantity - 1})">−</button>
+                  <span class="qty-display">${item.quantity}</span>
+                  <button class="qty-btn" onclick="updateQty('${item.product._id}', ${item.quantity + 1})">+</button>
+                </div>
+              </div>
+              <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.5rem;">
+                <span style="font-weight:700; color:var(--accent);">${formatPrice(item.product.price * item.quantity)}</span>
+                <button class="btn btn-danger btn-sm" onclick="removeItem('${item.product._id}')">Remove</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="cart-summary">
+          <h3 style="margin-bottom:1.2rem; font-size:1.1rem;">Order Summary</h3>
+          <div class="summary-row"><span>Subtotal</span><span>${formatPrice(cartData.totalAmount)}</span></div>
+          <div class="summary-row"><span>Shipping</span><span style="color:var(--success);">Free</span></div>
+          <div class="summary-row"><span>Tax (18% GST)</span><span>${formatPrice(cartData.totalAmount * 0.18)}</span></div>
+          <div class="summary-total">
+            <span>Total</span>
+            <span>${formatPrice(cartData.totalAmount * 1.18)}</span>
+          </div>
+          <button class="btn btn-primary btn-full btn-lg" style="margin-top:1.2rem;" onclick="openModal()">
+            Proceed to Checkout →
+          </button>
+          <a href="index.html" class="btn btn-ghost btn-full" style="margin-top:0.5rem; text-align:center;">Continue Shopping</a>
+        </div>
+      </div>`;
+  };
+
+  const updateQty = async (productId, newQty) => {
+    if (newQty < 1) {
+      removeItem(productId);
+      return;
+    }
+    try {
+      cartData = await apiFetch('/cart/update', {
+        method: 'PUT',
+        body: JSON.stringify({ productId, quantity: newQty }),
+      });
+      renderCart();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const removeItem = async (productId) => {
+    try {
+      cartData = await apiFetch(`/cart/remove/${productId}`, { method: 'DELETE' });
+      renderCart();
+      showToast('Item removed from cart');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  // ===== CHECKOUT MODAL =====
+  const openModal = () => {
+    document.getElementById('checkout-modal').classList.add('open');
+  };
+
+  const closeModal = () => {
+    document.getElementById('checkout-modal').classList.remove('open');
+  };
+
+  // Close modal if clicking outside
+  document.getElementById('checkout-modal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('checkout-modal')) closeModal();
+  });
+
+  const placeOrder = async () => {
+    const street  = document.getElementById('street').value.trim();
+    const city    = document.getElementById('city').value.trim();
+    const state   = document.getElementById('state').value.trim();
+    const zipCode = document.getElementById('zipCode').value.trim();
+    const country = document.getElementById('country').value.trim();
+    const btn     = document.getElementById('place-order-btn');
+    const alert   = document.getElementById('modal-alert');
+
+    if (!street || !city || !state || !zipCode) {
+      alert.textContent = 'Please fill in all address fields';
+      alert.className = 'alert alert-error show';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Placing order…';
+
+    try {
+      await apiFetch('/orders', {
+        method: 'POST',
+        body: JSON.stringify({ shippingAddress: { street, city, state, zipCode, country } }),
+      });
+
+      closeModal();
+      showToast('Order placed successfully! 🎉');
+      setTimeout(() => window.location.href = 'orders.html', 1200);
+    } catch (err) {
+      alert.textContent = err.message;
+      alert.className = 'alert alert-error show';
+      btn.disabled = false;
+      btn.textContent = 'Place Order';
+    }
+  };
+</script>
+</body>
+</html>

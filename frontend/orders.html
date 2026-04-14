@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>My Orders — ShopLux</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <a class="navbar-brand" href="index.html">✦ ShopLux</a>
+  <ul class="navbar-nav">
+    <li><span id="nav-user" style="display:none; color:var(--text-muted); font-size:0.85rem; padding:0 0.5rem;"></span></li>
+    <li><a class="nav-link" href="index.html"><span>Shop</span></a></li>
+    <li><a class="nav-link" href="cart.html"><span>Cart</span> <span class="nav-badge" id="cart-count">0</span></a></li>
+    <li><a class="nav-link active" href="orders.html"><span>Orders</span></a></li>
+    <li><a class="nav-link" href="admin.html" id="nav-admin" style="display:none;"><span>Admin</span></a></li>
+    <li><a class="nav-link btn btn-outline btn-sm" href="login.html" id="nav-login">Login</a></li>
+    <li><a class="nav-link btn btn-primary btn-sm" href="signup.html" id="nav-signup">Sign Up</a></li>
+    <li><button class="btn btn-ghost btn-sm" id="nav-logout" style="display:none;">Logout</button></li>
+  </ul>
+</nav>
+
+<main class="container page-content">
+  <div class="page-header">
+    <h1>My Orders</h1>
+    <p>Track your purchase history</p>
+  </div>
+
+  <div id="orders-list">
+    <div class="loading-center"><div class="spinner"></div></div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script src="js/api.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!requireLogin()) return;
+    updateNavbar();
+    await loadOrders();
+    await updateCartBadge();
+  });
+
+  const loadOrders = async () => {
+    try {
+      const orders = await apiFetch('/orders/my');
+      renderOrders(orders);
+    } catch (err) {
+      document.getElementById('orders-list').innerHTML =
+        `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>Error loading orders</h3><p>${err.message}</p></div>`;
+    }
+  };
+
+  const renderOrders = (orders) => {
+    const container = document.getElementById('orders-list');
+
+    if (!orders.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">📦</div>
+          <h3>No orders yet</h3>
+          <p>Your order history will appear here</p>
+          <a href="index.html" class="btn btn-primary" style="margin-top:1.2rem;">Start Shopping</a>
+        </div>`;
+      return;
+    }
+
+    const statusBadge = (s) => `<span class="badge badge-${s}">${s}</span>`;
+
+    container.innerHTML = orders.map(order => `
+      <div class="order-card">
+        <div class="order-header">
+          <div>
+            <div style="font-weight:600; margin-bottom:0.2rem;">Order #${order._id.slice(-8).toUpperCase()}</div>
+            <div class="order-id">${formatDate(order.createdAt)}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:1rem;">
+            ${statusBadge(order.status)}
+            <span style="font-weight:700; color:var(--accent);">${formatPrice(order.totalAmount)}</span>
+          </div>
+        </div>
+        <div class="order-body">
+          ${order.items.map(item => `
+            <div class="order-item-row">
+              <span>${item.name} <span style="color:var(--text-muted);">×${item.quantity}</span></span>
+              <span style="color:var(--text-muted);">${formatPrice(item.price * item.quantity)}</span>
+            </div>
+          `).join('')}
+          <div class="order-total">
+            <span>Total</span>
+            <span>${formatPrice(order.totalAmount)}</span>
+          </div>
+
+          ${order.shippingAddress ? `
+          <div style="margin-top:0.8rem; padding-top:0.8rem; border-top:1px solid var(--border); font-size:0.85rem; color:var(--text-muted);">
+            📍 ${order.shippingAddress.street}, ${order.shippingAddress.city}, ${order.shippingAddress.state} — ${order.shippingAddress.zipCode}
+          </div>` : ''}
+        </div>
+      </div>
+    `).join('');
+  };
+
+  const updateCartBadge = async () => {
+    try {
+      const cart = await apiFetch('/cart');
+      const count = cart.items?.reduce((s, i) => s + i.quantity, 0) || 0;
+      document.getElementById('cart-count').textContent = count;
+    } catch (_) {}
+  };
+</script>
+</body>
+</html>
